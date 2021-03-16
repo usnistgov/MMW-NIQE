@@ -1,20 +1,13 @@
-import numpy as np
 import scipy.misc
 import scipy.io
-from os.path import dirname
-from os.path import join
 import scipy
 from PIL import Image
-import numpy as np
-import cv2
 import scipy.ndimage
 import numpy as np
 import scipy.special
 import math
-import matplotlib.pyplot as plt
 from scipy.stats import exponweib
 from scipy.optimize import fmin
-import pandas as pd
 import scipy.stats
 import scipy.signal
 from numpy.lib.stride_tricks import as_strided as ast
