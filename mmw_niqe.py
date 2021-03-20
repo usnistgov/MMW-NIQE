@@ -340,7 +340,7 @@ def mmw_niqe_train(inputTrainImgFolder):
 
 
 if __name__ == "__main__":
-    ref_param_filename = 'refs_params_stage1and2_APS_angle0.pkl'
+    ref_param_filename = 'ref_params_stage1and2_APS_angle0.pkl'
 
     with open(ref_param_filename, 'rb') as f:  # Python 3: open(..., 'rb')
         ref_params = pickle.load(f)
