@@ -1,17 +1,29 @@
+import numpy as np
 import scipy.misc
 import scipy.io
+from os.path import dirname
+from os.path import join
 import scipy
 from PIL import Image
+import numpy as np
+import random
+import cv2
 import scipy.ndimage
 import numpy as np
 import scipy.special
 import math
+import matplotlib.pyplot as plt
 from scipy.stats import exponweib
 from scipy.optimize import fmin
+import pandas as pd
 import scipy.stats
 import scipy.signal
 from numpy.lib.stride_tricks import as_strided as ast
 import warnings
+import glob
+import tsahelper as tsa
+import pickle
+from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
 
@@ -255,23 +267,33 @@ def _get_patches_generic(img, patch_size_h, patch_size_w, is_train, stride):
         feats.append(feats_lvl)
         #img = imresize(img, 0.5, interp='bicubic', mode='F')
         dsize = ( int(img.shape[1]/2) , int(img.shape[0]/2) )
+        # print('before',img.shape,'after',dsize)
         img = np.array(Image.fromarray(img).resize(dsize, Image.BICUBIC))
         # img = cv2.resize(img, dsize, interpolation=cv2.INTER_LANCZOS4)
+
+    # print('feats[0].shape',feats[0].shape)
+    # print('feats[1].shape',feats[1].shape)
 
     out1 = np.hstack((feats[0], feats[1]))
     
     return(out1, sharpness_first)
 
 
-def mmw_niqe(inputImgData):
+def mmw_niqe(inputImgData, ref_param):
 
     patch_size_row = 110
     patch_size_col = 84	
     thresh = 75
 
-    params = scipy.io.loadmat('mmw-niqe_model_cf_25_bw_60.mat')
-    pop_mu = np.ravel(params["mu_25_60"])
-    pop_cov = params["cov_25_60"]
+    inputImgData = tsa.convert_to_grayscale(inputImgData)
+
+    ## for matlab
+    # params = scipy.io.loadmat(join('..','utils', 'mmw-niqe_model_cf_25_bw_60.mat'))
+    # pop_mu = np.ravel(params["mu_25_60"])
+    # pop_cov = params["cov_25_60"]
+
+    pop_cov = ref_param['cov']
+    pop_mu = ref_param['mu']
 
     feats, sharpness = get_patches_test_features(inputImgData, patch_size_row, patch_size_col)
     ind = sharpness  > np.percentile(sharpness, thresh)
@@ -287,15 +309,45 @@ def mmw_niqe(inputImgData):
 
     return niqe_score
 
+def mmw_niqe_train(inputTrainImgFolder):
+    import random
+    files = glob.glob(inputTrainImgFolder+'*.aps')
+    random.shuffle(files)
+
+    patch_size_row = 110
+    patch_size_col = 84 
+    thresh = 75
+    num_feats = 30
+
+    feats_train = np.empty([0,num_feats])
+
+    for f in tqdm(files):
+
+        inputImgData = cv2.rotate(tsa.read_data(f)[:,:,0],cv2.ROTATE_90_COUNTERCLOCKWISE)
+        inputImgData = tsa.convert_to_grayscale(inputImgData)
+        feats, sharpness = get_patches_test_features(inputImgData, patch_size_row, patch_size_col)
+        ind = sharpness  > np.percentile(sharpness, thresh)
+        
+        feats = feats[ind, :]
+        feats_train = np.vstack((feats_train, feats))
+
+    ref_mu = np.mean(feats_train, axis=0)
+    ref_cov = np.cov(feats_train.T)
+    ref_params = {"mu":ref_mu, "cov": ref_cov}
+
+    return ref_params
+
+
 
 if __name__ == "__main__":
+    ref_param_filename = 'refs_params_stage1and2_APS_angle0.pkl'
 
-    test_file = 'mmw_img.png'
+    with open(ref_param_filename, 'rb') as f:  # Python 3: open(..., 'rb')
+        ref_params = pickle.load(f)
 
-    img = np.array(Image.open('../test_images/0.png'))[:,:,0] # 1
-    mmw_niqe_score = mmw_niqe(img)
+    filename = 'mmw_image_0.png'
+    img_png = cv2.imread(filename,-1)
+    score = mmw_niqe(img_png, ref_params)
+    print('MMW-NIQE score of {} is: {:0.3f}'.format(filename,score))
 
-    print('-----------------------------------------------------')
-    print('    The MMW-NIQE score of "{}" is: {:0.3f}'.format(test_file,mmw_niqe_score))
-    print('-----------------------------------------------------')
 
