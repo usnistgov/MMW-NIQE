@@ -1,27 +1,23 @@
-import numpy as np
+
 import scipy.misc
 import scipy.io
-from os.path import dirname
-from os.path import join
 import scipy
 from PIL import Image
-import numpy as np
-import random
 import cv2
 import scipy.ndimage
 import numpy as np
 import scipy.special
 import math
-import matplotlib.pyplot as plt
+
 from scipy.stats import exponweib
 from scipy.optimize import fmin
-import pandas as pd
+
 import scipy.stats
 import scipy.signal
 from numpy.lib.stride_tricks import as_strided as ast
 import warnings
 import glob
-import tsahelper as tsa
+
 import pickle
 from tqdm import tqdm
 warnings.filterwarnings("ignore")
@@ -279,21 +275,29 @@ def _get_patches_generic(img, patch_size_h, patch_size_w, is_train, stride):
     return(out1, sharpness_first)
 
 
-def mmw_niqe(inputImgData, ref_param):
+def mmw_niqe(inputImgData, angle=0, ref_params=None,):
+
+    if ref_params is not None:
+        ref_params = ref_params
+    else:
+        ref_param_filename = 'pkl_files/ref_params_stage1and2_APS_angle{}.pkl'.format(angle)
+        with open(ref_param_filename, 'rb') as f:  # Python 3: open(..., 'rb')
+            ref_params = pickle.load(f)
 
     patch_size_row = 110
     patch_size_col = 84	
     thresh = 75
 
-    inputImgData = tsa.convert_to_grayscale(inputImgData)
+    inputImgData = inputImgData.copy()*1.0 - np.amin(inputImgData)
+    inputImgData = inputImgData*255.0/np.amax(inputImgData)
 
     ## for matlab
     # params = scipy.io.loadmat(join('..','utils', 'mmw-niqe_model_cf_25_bw_60.mat'))
     # pop_mu = np.ravel(params["mu_25_60"])
     # pop_cov = params["cov_25_60"]
 
-    pop_cov = ref_param['cov']
-    pop_mu = ref_param['mu']
+    pop_cov = ref_params['cov']
+    pop_mu = ref_params['mu']
 
     feats, sharpness = get_patches_test_features(inputImgData, patch_size_row, patch_size_col)
     ind = sharpness  > np.percentile(sharpness, thresh)
@@ -309,10 +313,13 @@ def mmw_niqe(inputImgData, ref_param):
 
     return niqe_score
 
-def mmw_niqe_train(inputTrainImgFolder):
+def mmw_niqe_train(inputTrainImgFolder,angle=0):
     import random
+    import tsahelper as tsa
     files = glob.glob(inputTrainImgFolder+'*.aps')
     random.shuffle(files)
+
+    #files = files[0:10]
 
     patch_size_row = 110
     patch_size_col = 84 
@@ -323,7 +330,7 @@ def mmw_niqe_train(inputTrainImgFolder):
 
     for f in tqdm(files):
 
-        inputImgData = cv2.rotate(tsa.read_data(f)[:,:,0],cv2.ROTATE_90_COUNTERCLOCKWISE)
+        inputImgData = cv2.rotate(tsa.read_data(f)[:,:,angle],cv2.ROTATE_90_COUNTERCLOCKWISE)
         inputImgData = tsa.convert_to_grayscale(inputImgData)
         feats, sharpness = get_patches_test_features(inputImgData, patch_size_row, patch_size_col)
         ind = sharpness  > np.percentile(sharpness, thresh)
@@ -336,18 +343,4 @@ def mmw_niqe_train(inputTrainImgFolder):
     ref_params = {"mu":ref_mu, "cov": ref_cov}
 
     return ref_params
-
-
-
-if __name__ == "__main__":
-    ref_param_filename = 'ref_params_stage1and2_APS_angle0.pkl'
-
-    with open(ref_param_filename, 'rb') as f:  # Python 3: open(..., 'rb')
-        ref_params = pickle.load(f)
-
-    filename = 'mmw_image_0.png'
-    img_png = cv2.imread(filename,-1)
-    score = mmw_niqe(img_png, ref_params)
-    print('MMW-NIQE score of {} is: {:0.3f}'.format(filename,score))
-
 
